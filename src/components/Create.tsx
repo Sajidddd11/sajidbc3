@@ -12,10 +12,55 @@ export function Create() {
   const [pass, setPass] = useState('');
   const [cpass, setCpass] = useState('');
 
+  const [emailError, setEmailError] = useState('');
+  const [phoneError, setPhoneError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [confirmPasswordError, setConfirmPasswordError] = useState('');
+
+  function validateEmail(email: string) {
+    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return re.test(email);
+  }
+
+  function validatePhone(phone: string) {
+    const re = /^\d{11}$/;
+    return re.test(phone);
+  }
+
+  function validatePassword(password: string) {
+    // At least one uppercase letter, one lowercase letter, one number, and one special character
+    const re = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    return re.test(password);
+  }
+
+  function handleEmailChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const value = e.target.value;
+    setEmail(value);
+    setEmailError(validateEmail(value) ? '' : 'Invalid email format');
+  }
+
+  function handlePhoneChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const value = e.target.value;
+    setPhone(value);
+    setPhoneError(validatePhone(value) ? '' : 'Phone number must be 11 digits');
+  }
+
+  function handlePasswordChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const value = e.target.value;
+    setPass(value);
+    setPasswordError(validatePassword(value) ? '' : 'Password must be at least 8 characters long and include an uppercase letter, a lowercase letter, a number, and a special character');
+  }
+
+  function handleConfirmPasswordChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const value = e.target.value;
+    setCpass(value);
+    setConfirmPasswordError(value === pass ? '' : 'Passwords do not match');
+  }
+
   async function handleClick() {
     try {
-      if (pass !== cpass) {
-        toast.error('Passwords do not match');
+      if (emailError || phoneError || passwordError || confirmPasswordError) {
+        toast.error('Please fix the errors before submitting');
         return;
       }
 
@@ -85,10 +130,11 @@ export function Create() {
             <input
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={handleEmailChange}
               className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Enter your email"
             />
+            {emailError && <p className="text-red-500 text-sm">{emailError}</p>}
           </div>
 
           <div>
@@ -101,10 +147,11 @@ export function Create() {
             <input
               type="tel"
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              onChange={handlePhoneChange}
               className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Enter your phone number"
             />
+            {phoneError && <p className="text-red-500 text-sm">{phoneError}</p>}
           </div>
 
           <div>
@@ -133,10 +180,11 @@ export function Create() {
             <input
               type="password"
               value={pass}
-              onChange={(e) => setPass(e.target.value)}
+              onChange={handlePasswordChange}
               className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Create a password"
             />
+            {passwordError && <p className="text-red-500 text-sm">{passwordError}</p>}
           </div>
 
           <div>
@@ -149,10 +197,11 @@ export function Create() {
             <input
               type="password"
               value={cpass}
-              onChange={(e) => setCpass(e.target.value)}
+              onChange={handleConfirmPasswordChange}
               className="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Confirm your password"
             />
+            {confirmPasswordError && <p className="text-red-500 text-sm">{confirmPasswordError}</p>}
           </div>
 
           <button

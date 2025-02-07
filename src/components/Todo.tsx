@@ -21,13 +21,15 @@ export function Todo({ title, description, is_completed, priority, id, deadline,
   const [editDeadline, setEditDeadline] = useState(deadline);
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      const distance = calculateTimeLeft(new Date(deadline));
-      setTimeLeft(distance);
-    }, 1000);
+    if (!is_completed) {
+      const timer = setInterval(() => {
+        const distance = calculateTimeLeft(new Date(deadline));
+        setTimeLeft(distance);
+      }, 1000);
 
-    return () => clearInterval(timer);
-  }, [deadline]);
+      return () => clearInterval(timer);
+    }
+  }, [deadline, is_completed]);
 
   useEffect(() => {
     setEditTitle(title);
@@ -207,10 +209,12 @@ export function Todo({ title, description, is_completed, priority, id, deadline,
         </div>
       ) : (
         <div className="flex items-center justify-between mt-2">
-          <div className="flex items-center text-sm text-gray-500">
-            <Clock className="w-4 h-4 mr-1" />
-            {timeLeft}
-          </div>
+          {!is_completed && (
+            <div className="flex items-center text-sm text-gray-500">
+              <Clock className="w-4 h-4 mr-1" />
+              {timeLeft}
+            </div>
+          )}
           <div className="flex items-center text-sm">
             <AlertTriangle className={`w-4 h-4 mr-1 ${priority > 8 ? 'text-red-500' : 'text-yellow-500'}`} />
             Priority: {priority}

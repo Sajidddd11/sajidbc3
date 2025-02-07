@@ -9,11 +9,26 @@ interface StopwatchModalProps {
 
 export function StopwatchModal({ isOpen, onClose }: StopwatchModalProps) {
   return (
-    <Modal open={isOpen} onClose={onClose} center>
-      <div className="p-4">
-        <h2 className="text-2xl font-bold mb-4">Stopwatch</h2>
-        <Stopwatch />
-      </div>
-    </Modal>
+    <>
+      <style>
+        {`
+          .modal-content {
+            padding: 1rem;
+          }
+
+          @media (max-width: 600px) {
+            .modal-content {
+              padding: 0.5rem;
+            }
+          }
+        `}
+      </style>
+      <Modal open={isOpen} onClose={onClose} center>
+        <div className="modal-content">
+          <h2 className="text-2xl font-bold mb-4">Stopwatch</h2>
+          <Stopwatch />
+        </div>
+      </Modal>
+    </>
   );
 }
