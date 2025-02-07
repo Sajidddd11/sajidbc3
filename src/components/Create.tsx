@@ -28,9 +28,8 @@ export function Create() {
   }
 
   function validatePassword(password: string) {
-    // At least one uppercase letter, one lowercase letter, one number, and one special character
-    const re = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-    return re.test(password);
+    // Minimum 8 characters
+    return password.length >= 8;
   }
 
   function handleEmailChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -48,7 +47,7 @@ export function Create() {
   function handlePasswordChange(e: React.ChangeEvent<HTMLInputElement>) {
     const value = e.target.value;
     setPass(value);
-    setPasswordError(validatePassword(value) ? '' : 'Password must be at least 8 characters long and include an uppercase letter, a lowercase letter, a number, and a special character');
+    setPasswordError(validatePassword(value) ? '' : 'Password must be at least 8 characters long');
   }
 
   function handleConfirmPasswordChange(e: React.ChangeEvent<HTMLInputElement>) {
