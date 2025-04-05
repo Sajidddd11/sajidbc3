@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { CheckCircle, Clock, Trash2, AlertTriangle, Edit3, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { todoApi } from '../utils/api';
 
 interface TodoProps {
   title: string;
@@ -9,7 +10,7 @@ interface TodoProps {
   priority: number;
   id: string;
   deadline: string;
-  updateTodos: () => void;
+  updateTodos: (updatedTodo?: any, deletedId?: string) => void;
 }
 
 export function Todo({ title, description, is_completed, priority, id, deadline, updateTodos }: TodoProps) {
@@ -19,9 +20,15 @@ export function Todo({ title, description, is_completed, priority, id, deadline,
   const [editDescription, setEditDescription] = useState(description);
   const [editPriority, setEditPriority] = useState(priority);
   const [editDeadline, setEditDeadline] = useState(deadline);
+  const [localIsCompleted, setLocalIsCompleted] = useState(is_completed);
+  
+  // Use separate loading states for different operations
+  const [isToggleLoading, setIsToggleLoading] = useState(false);
+  const [isDeleteLoading, setIsDeleteLoading] = useState(false);
+  const [isEditLoading, setIsEditLoading] = useState(false);
 
   useEffect(() => {
-    if (!is_completed) {
+    if (!localIsCompleted) {
       const timer = setInterval(() => {
         const distance = calculateTimeLeft(new Date(deadline));
         setTimeLeft(distance);
@@ -29,81 +36,104 @@ export function Todo({ title, description, is_completed, priority, id, deadline,
 
       return () => clearInterval(timer);
     }
-  }, [deadline, is_completed]);
+  }, [deadline, localIsCompleted]);
 
   useEffect(() => {
     setEditTitle(title);
     setEditDescription(description);
     setEditPriority(priority);
     setEditDeadline(deadline);
-  }, [title, description, priority, deadline]);
+    setLocalIsCompleted(is_completed);
+  }, [title, description, priority, deadline, is_completed]);
 
   async function deleteClick() {
     try {
-      const r = await fetch(`https://5nvfy5p7we.execute-api.ap-south-1.amazonaws.com/dev/todo/${id}`, {
-        method: "DELETE"
-      });
-      const j = await r.json();
-      toast.success(j.message);
-      updateTodos();
+      setIsDeleteLoading(true);
+      await todoApi.delete(id);
+      toast.success('Todo deleted successfully');
+      updateTodos(null, id); // Signal deletion to parent
     } catch (error) {
       toast.error("Failed to delete todo");
+    } finally {
+      setIsDeleteLoading(false);
     }
   }
 
   async function toggleComplete() {
-    const newStatus = !is_completed;
     try {
-      const r = await fetch(`https://5nvfy5p7we.execute-api.ap-south-1.amazonaws.com/dev/todo/${id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          title,
-          description,
-          is_completed: newStatus,
-          priority,
-          deadline
-        })
-      });
-      const j = await r.json();
-      if (r.ok) {
-        toast.success("Todo status updated");
-        updateTodos();
+      setIsToggleLoading(true);
+      
+      // Update local state immediately for responsive UI
+      const newStatus = !localIsCompleted;
+      setLocalIsCompleted(newStatus);
+      
+      // We need to explicitly pass the current values to ensure the
+      // API gets the most up-to-date data
+      const todoData = {
+        title,
+        description,
+        is_completed: newStatus,
+        priority,
+        deadline
+      };
+      
+      console.log('Toggling completion status:', todoData);
+      const updatedTodo = await todoApi.update(id, todoData);
+      
+      console.log('Response from toggle update:', updatedTodo);
+      toast.success("Todo status updated");
+      
+      // Update the parent component with the latest data
+      if (updatedTodo && updatedTodo.id) {
+        updateTodos(updatedTodo); 
       } else {
-        toast.error("Failed to update todo status");
+        console.error('Invalid response from update API:', updatedTodo);
+        // Fall back to refreshing all todos if we don't get a proper response
+        updateTodos();
       }
     } catch (error) {
+      // Revert local state on error
+      setLocalIsCompleted(!localIsCompleted);
       toast.error("Failed to update todo status");
+      console.error('Error toggling completion:', error);
+    } finally {
+      setIsToggleLoading(false);
     }
   }
 
   async function saveEdit() {
     try {
-      const r = await fetch(`https://5nvfy5p7we.execute-api.ap-south-1.amazonaws.com/dev/todo/${id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          title: editTitle,
-          description: editDescription,
-          is_completed,
-          priority: editPriority,
-          deadline: editDeadline
-        })
-      });
-      const j = await r.json();
-      if (r.ok) {
-        toast.success("Todo updated successfully");
-        updateTodos();
-        setIsEditing(false);
+      setIsEditLoading(true);
+      
+      const todoData = {
+        title: editTitle,
+        description: editDescription,
+        is_completed: localIsCompleted,
+        priority: editPriority,
+        deadline: editDeadline
+      };
+      
+      console.log('Saving edited todo:', todoData);
+      const updatedTodo = await todoApi.update(id, todoData);
+      
+      console.log('Response from save edit:', updatedTodo);
+      toast.success("Todo updated successfully");
+      
+      // Update the parent component with the latest data
+      if (updatedTodo && updatedTodo.id) {
+        updateTodos(updatedTodo);
       } else {
-        toast.error("Failed to update todo");
+        console.error('Invalid response from update API:', updatedTodo);
+        // Fall back to refreshing all todos if we don't get a proper response
+        updateTodos();
       }
+      
+      setIsEditing(false);
     } catch (error) {
       toast.error("Failed to update todo");
+      console.error('Error saving todo edit:', error);
+    } finally {
+      setIsEditLoading(false);
     }
   }
 
@@ -147,9 +177,17 @@ export function Todo({ title, description, is_completed, priority, id, deadline,
         <div className="flex items-center gap-2">
           <button
             onClick={toggleComplete}
-            className={`p-1 rounded-full ${is_completed ? 'text-green-500' : 'text-gray-400'}`}
+            disabled={isToggleLoading || isDeleteLoading || isEditLoading}
+            className={`p-1 rounded-full ${localIsCompleted ? 'text-green-500' : 'text-gray-400'} ${isToggleLoading ? 'opacity-50' : ''}`}
           >
-            <CheckCircle className="w-6 h-6" />
+            {isToggleLoading ? (
+              <svg className="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            ) : (
+              <CheckCircle className="w-6 h-6" />
+            )}
           </button>
           {isEditing ? (
             <input
@@ -159,17 +197,25 @@ export function Todo({ title, description, is_completed, priority, id, deadline,
               className="text-lg border-b border-gray-300 focus:outline-none focus:border-blue-500"
             />
           ) : (
-            <span className={`text-lg ${is_completed ? 'line-through text-gray-500' : ''}`}>
-              {title}
+            <span className={`text-lg ${localIsCompleted ? 'line-through text-gray-500' : ''}`}>
+              {editTitle}
             </span>
           )}
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={deleteClick}
-            className="p-1 text-red-500 hover:bg-red-50 rounded-full"
+            disabled={isToggleLoading || isDeleteLoading || isEditLoading}
+            className="p-1 text-red-500 hover:bg-red-50 rounded-full disabled:opacity-50"
           >
-            <Trash2 className="w-5 h-5" />
+            {isDeleteLoading ? (
+              <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            ) : (
+              <Trash2 className="w-5 h-5" />
+            )}
           </button>
           <button
             onClick={() => {
@@ -179,9 +225,17 @@ export function Todo({ title, description, is_completed, priority, id, deadline,
                 setIsEditing(true);
               }
             }}
-            className="p-1 text-blue-500 hover:bg-blue-50 rounded-full"
+            disabled={isToggleLoading || isDeleteLoading || isEditLoading}
+            className="p-1 text-blue-500 hover:bg-blue-50 rounded-full disabled:opacity-50"
           >
-            {isEditing ? <Save className="w-5 h-5" /> : <Edit3 className="w-5 h-5" />}
+            {isEditLoading && isEditing ? (
+              <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            ) : (
+              isEditing ? <Save className="w-5 h-5" /> : <Edit3 className="w-5 h-5" />
+            )}
           </button>
         </div>
       </div>
@@ -195,6 +249,8 @@ export function Todo({ title, description, is_completed, priority, id, deadline,
           <div className="flex flex-col md:flex-row gap-2 mt-2">
             <input
               type="number"
+              min="1"
+              max="10"
               value={editPriority}
               onChange={(e) => setEditPriority(Number(e.target.value))}
               className="w-full md:w-20 p-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
@@ -209,15 +265,15 @@ export function Todo({ title, description, is_completed, priority, id, deadline,
         </div>
       ) : (
         <div className="flex items-center justify-between mt-2">
-          {!is_completed && (
+          {!localIsCompleted && (
             <div className="flex items-center text-sm text-gray-500">
               <Clock className="w-4 h-4 mr-1" />
               {timeLeft}
             </div>
           )}
           <div className="flex items-center text-sm">
-            <AlertTriangle className={`w-4 h-4 mr-1 ${priority > 8 ? 'text-red-500' : 'text-yellow-500'}`} />
-            Priority: {priority}
+            <AlertTriangle className={`w-4 h-4 mr-1 ${editPriority > 8 ? 'text-red-500' : 'text-yellow-500'}`} />
+            Priority: {editPriority}
           </div>
         </div>
       )}

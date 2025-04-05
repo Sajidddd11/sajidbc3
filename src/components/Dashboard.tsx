@@ -6,6 +6,7 @@ import { Todo } from './Todo';
 import { Search, SortAsc, User, Clock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { StopwatchModal } from './StopwatchModal';
+import { todoApi } from '../utils/api';
 
 interface TodoItem {
   id: string;
@@ -25,23 +26,82 @@ export function Dashboard() {
   const [sortBy, setSortBy] = useState('created_at');
   const [stats, setStats] = useState({ total: 0, completed: 0, efficiency: 0 });
   const [isStopwatchOpen, setIsStopwatchOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   async function fetchTodos() {
     try {
-      const r = await fetch('https://5nvfy5p7we.execute-api.ap-south-1.amazonaws.com/dev/todos');
-      const data = await r.json();
+      setIsLoading(true);
+      const data = await todoApi.getAll();
       const todosArray = Array.isArray(data) ? data : [];
       setTodos(todosArray);
-
-      const total = todosArray.length;
-      const completed = todosArray.filter((todo: TodoItem) => todo.is_completed).length;
-      const efficiency = total > 0 ? (completed / total) * 100 : 0;
-      setStats({ total, completed, efficiency });
+      updateStats(todosArray);
     } catch (error) {
       toast.error('Failed to fetch todos');
       setTodos([]);
+    } finally {
+      setIsLoading(false);
     }
   }
+
+  // Handle individual todo updates
+  const handleTodoUpdate = (updatedTodo?: any, deletedId?: string) => {
+    if (deletedId) {
+      // Handle deletion
+      const updatedTodos = todos.filter(todo => todo.id !== deletedId);
+      setTodos(updatedTodos);
+      updateStats(updatedTodos);
+      return;
+    }
+    
+    if (updatedTodo) {
+      // Handle update
+      setTodos(currentTodos => {
+        const updatedTodos = currentTodos.map(todo => 
+          todo.id === updatedTodo.id ? updatedTodo : todo
+        );
+        updateStats(updatedTodos);
+        return updatedTodos;
+      });
+    } else {
+      // Fallback to full refresh if needed
+      fetchTodos();
+    }
+  };
+
+  // Handle new todo creation
+  const handleCreateTodo = (newTodo?: any) => {
+    if (newTodo && newTodo.id) {
+      console.log('Adding new todo to the list:', newTodo);
+      // Ensure the todo has all required fields
+      const formattedTodo: TodoItem = {
+        id: newTodo.id,
+        title: newTodo.title || '',
+        description: newTodo.description || '',
+        is_completed: newTodo.is_completed || false,
+        priority: newTodo.priority || 5,
+        deadline: newTodo.deadline || new Date().toISOString(),
+        created_at: newTodo.created_at || new Date().toISOString()
+      };
+      
+      setTodos(currentTodos => {
+        const updatedTodos = [formattedTodo, ...currentTodos];
+        updateStats(updatedTodos);
+        return updatedTodos;
+      });
+    } else {
+      // Fallback to full refresh if newTodo is missing or malformed
+      console.log('Performing full refresh for todos');
+      fetchTodos();
+    }
+  };
+
+  // Calculate stats from todo list
+  const updateStats = (todoList: TodoItem[]) => {
+    const total = todoList.length;
+    const completed = todoList.filter((todo: TodoItem) => todo.is_completed).length;
+    const efficiency = total > 0 ? (completed / total) * 100 : 0;
+    setStats({ total, completed, efficiency });
+  };
 
   useEffect(() => {
     const username = localStorage.getItem('username');
@@ -89,7 +149,7 @@ export function Dashboard() {
         <div className="flex flex-col md:flex-row justify-between items-center mb-8">
           <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Todo Dashboard</h1>
           <div className="flex flex-row items-center gap-4 mt-4 md:mt-0">
-            <CreateTodoModal updateTodos={fetchTodos} />
+            <CreateTodoModal updateTodos={handleCreateTodo} />
             <button
               onClick={() => setIsStopwatchOpen(true)}
               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200"
@@ -182,22 +242,36 @@ export function Dashboard() {
         </div>
 
         <div className="space-y-4">
-          {filteredAndSortedTodos.map((todo) => (
-            <Todo
-              key={todo.id}
-              id={todo.id}
-              title={todo.title}
-              description={todo.description}
-              is_completed={todo.is_completed}
-              priority={todo.priority}
-              deadline={todo.deadline}
-              updateTodos={fetchTodos}
-            />
-          ))}
-          {filteredAndSortedTodos.length === 0 && (
-            <div className="text-center py-8 text-gray-500">
-              No todos found. Create a new one to get started!
+          {isLoading ? (
+            <div className="flex justify-center items-center py-12">
+              <div className="flex flex-col items-center gap-2">
+                <svg className="animate-spin h-8 w-8 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <p className="text-gray-500">Loading todos...</p>
+              </div>
             </div>
+          ) : (
+            <>
+              {filteredAndSortedTodos.map((todo) => (
+                <Todo
+                  key={todo.id}
+                  id={todo.id}
+                  title={todo.title}
+                  description={todo.description}
+                  is_completed={todo.is_completed}
+                  priority={todo.priority}
+                  deadline={todo.deadline}
+                  updateTodos={handleTodoUpdate}
+                />
+              ))}
+              {filteredAndSortedTodos.length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                  No todos found. Create a new one to get started!
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
